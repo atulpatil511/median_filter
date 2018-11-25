@@ -36,12 +36,28 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <CL/cl.h>
 #include <vector>
-
+#include "sys/time.h"
 //#include "xcl2.hpp"
 //home/atul1/Desktop/SDAccel_examples/libs/bitmap
 
 #include "/home/atul1/Desktop/SDAccel_examples/libs/bitmap/bitmap.h"
 #include "/home/atul1/Desktop/SDAccel_examples/libs/bitmap/bitmap.cpp"
+
+
+double timestamp(){
+double ms=0.0;
+timeval time;
+gettimeofday(&time,NULL);
+ms=(time.tv_sec*1000.0)+(time.tv_usec/1000.0);
+return ms;
+
+
+}
+
+
+
+
+
 void checkErrorStatus(cl_int error, const char* message)
 {
   if (error != CL_SUCCESS)
@@ -242,6 +258,7 @@ int main(int argc, char* argv[])
 
   checkErrorStatus(err, "Unable to enqueue write buffer") ;
 
+   double first_stamp=timestamp();
 
   //-----------------------------------------------------------------------------------------------
   //    STEP 8 create kernel
@@ -296,6 +313,11 @@ int main(int argc, char* argv[])
    std::cout << "Reading the kernel ....\n";
   // Read back the image from the kernel
   std::cout << "Reading output image and writing to file...\n";
+
+  double second_stamp=timestamp();
+  double time_elapsed=second_stamp-first_stamp;
+  printf("\nTotal time elspased is %f \n",time_elapsed);
+
   //eventList.clear();
   //eventList.push_back(kernel_Event);
   //err = q.enqueueMigrateMemObjects({buffer_output}, CL_MIGRATE_MEM_OBJECT_HOST, &eventList, &read_Event);
