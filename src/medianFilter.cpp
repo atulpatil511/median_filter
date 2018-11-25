@@ -59,6 +59,16 @@ int main(int argc, char* argv[])
     return -1 ;
   }
   
+  //--------------------------------------------------------------
+  //TEST ARGUEMENTS
+  //-------------------------------------------------------------
+   
+  cl_uint num_events_in_wait=1;
+  const cl_event *event_wait_list;
+
+
+
+  
   // Read the input bit map file into memory
   std::cout << "Reading input image...\n";
   const char* bitmapFilename = argv[2] ;
@@ -104,6 +114,28 @@ int main(int argc, char* argv[])
    status=clGetPlatformIDs(100,platforms,&platforms_n);
 
 
+   printf("=== %d OpenCL platform(s) found: ===\n", platforms_n);
+	for (int i=0; i<platforms_n; i++)
+	{
+		char buffer[10240];
+		printf("  -- %d --\n", i);
+		status=clGetPlatformInfo(platforms[i], CL_PLATFORM_PROFILE, 10240, buffer, NULL);
+		//printf("  PROFILE = %s\n", buffer);
+		status=clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, 10240, buffer, NULL);
+		printf("  VERSION = %s\n", buffer);
+		status=clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, 10240, buffer, NULL);
+		printf("  NAME = %s\n", buffer);
+		status=clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, 10240, buffer, NULL);
+		printf("  VENDOR = %s\n", buffer);
+		status=clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, 10240, buffer, NULL);
+		//printf("  EXTENSIONS = %s\n", buffer);
+	}
+
+	if (platforms_n == 0)
+	{	
+		printf("No OpenCL platform found!\n\n");
+		//return 1;
+	}
 
   // The get_xil_devices will return vector of Xilinx Devices
   // std::vector<cl::Device> devices = xcl::get_xil_devices();
@@ -116,11 +148,42 @@ int main(int argc, char* argv[])
   cl_uint numDevices=0;
   status=clGetDeviceIDs(platforms[0],CL_DEVICE_TYPE_GPU,100,devices,&numDevices);
 
+   printf("=== %d OpenCL device(s) found on platform:\n", platforms_n);
+	for (int i=0; i<numDevices; i++)
+	{
+		char buffer[10240];
+		cl_uint buf_uint;
+		cl_ulong buf_ulong;
+		printf("  -- %d --\n", i);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
+		printf("  DEVICE_NAME = %s\n", buffer);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_VENDOR, sizeof(buffer), buffer, NULL);
+		printf("  DEVICE_VENDOR = %s\n", buffer);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_VERSION, sizeof(buffer), buffer, NULL);
+		//printf("  DEVICE_VERSION = %s\n", buffer);
+		status=clGetDeviceInfo(devices[i], CL_DRIVER_VERSION, sizeof(buffer), buffer, NULL);
+		//printf("  DRIVER_VERSION = %s\n", buffer);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(buf_uint), &buf_uint, NULL);
+		printf("  DEVICE_MAX_COMPUTE_UNITS = %u\n", (unsigned int)buf_uint);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(buf_uint), &buf_uint, NULL);
+		//printf("  DEVICE_MAX_CLOCK_FREQUENCY = %u\n", (unsigned int)buf_uint);
+		status=clGetDeviceInfo(devices[i], CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(buf_ulong), &buf_ulong, NULL);
+		//printf("  DEVICE_GLOBAL_MEM_SIZE = %llu\n", (unsigned long long)buf_ulong);
+		printf("\n");
+	}
+
+	if (numDevices == 0)
+	{	printf("No OpenCL device found!\n\n");
+		//return 1;
+	}
+
+
+
   //---------------------------------------------------------------
   // STEP 3 Creating Context
   //---------------------------------------------------------------
    cl_context context=NULL;
-  context=clCreateContext(NULL,numDevices,devices,NULL,NULL,&status);
+   context=clCreateContext(NULL,numDevices,devices,NULL,NULL,&status);
 
 
 
@@ -201,11 +264,11 @@ int main(int argc, char* argv[])
   // STEP 9 Setting the kernel Arguements
   //------------------------------------------------------------------
   status=clSetKernelArg(kernel,0,sizeof(cl_mem),&buffer_input);
-  status=clSetKernelArg(kernel,1,sizeof(cl_mem),&buffer_output);
+  status |=clSetKernelArg(kernel,1,sizeof(cl_mem),&buffer_output);
   status=clSetKernelArg(kernel,2,sizeof(cl_mem),&width);
   status=clSetKernelArg(kernel,3,sizeof(cl_mem),&height);
 
-
+  std::cout << "Arguements are set ....\n";
 
   //std::vector<cl::Event> eventList;
   //eventList.push_back(write_Event);
@@ -216,12 +279,12 @@ int main(int argc, char* argv[])
   
   size_t globalWorkSize[1];
   globalWorkSize[0]=1;
-
+  std::cout << "work structure configured ....\n";
   //----------------------------------------------------------------
   // STEP 11 Enqueue The kernel for execution
   //--------------------------------------------------------------
-  clEnqueueNDRangeKernel(cmdQueue,kernel,1,NULL,globalWorkSize,NULL,0,NULL,NULL);
-
+  status=clEnqueueNDRangeKernel(cmdQueue,kernel,1,NULL,globalWorkSize,NULL,0,NULL,NULL);
+  std::cout << "kernel enqueued .....\n";
   // This function will execute the kernel on the FPGA
   //err = q.enqueueTask(krnl_medianFilter, &eventList, &kernel_Event);  
   //checkErrorStatus(err, "Unable to enqueue Task") ;
@@ -229,8 +292,8 @@ int main(int argc, char* argv[])
   //-------------------------------------------------------------------
   // STEP 12 READ the kernel
   //------------------------------------------------------------------
-   clEnqueueReadBuffer(cmdQueue,buffer_output,CL_TRUE,0,sizeof(size_t),(void *)"outTmage",0,NULL,NULL);
-
+   clEnqueueReadBuffer(cmdQueue,buffer_output,CL_TRUE,0,sizeof(size_t),(void *)"output.bmp",num_events_in_wait,NULL,NULL);
+   std::cout << "Reading the kernel ....\n";
   // Read back the image from the kernel
   std::cout << "Reading output image and writing to file...\n";
   //eventList.clear();
@@ -245,15 +308,15 @@ int main(int argc, char* argv[])
   if (argc == 4){
       goldenFilename = argv[3];
       //Read the golden bit map file into memory
-//     BitmapInterface goldenImage(goldenFilename);
-      //result = goldenImage.readBitmapFile() ;
+     BitmapInterface goldenImage(goldenFilename);
+      result = goldenImage.readBitmapFile() ;
       if (!result)
       {
           std::cout << "ERROR:Unable to Read Golden Bitmap File "<< goldenFilename << std::endl;
           return EXIT_FAILURE ;
       }
       //Compare Golden Image with Output image
-      /*if ( image.getHeight() != goldenImage.getHeight() || image.getWidth() != goldenImage.getWidth()){
+      if ( image.getHeight() != goldenImage.getHeight() || image.getWidth() != goldenImage.getWidth()){
           match = false;
       }else{
           int* goldImgPtr = goldenImage.bitmap();
@@ -264,14 +327,14 @@ int main(int argc, char* argv[])
                   break;
               }
           }
-      }*/
+      }
   }
 
   // Write the final image to disk
   printf("Writing RAW Image \n");
   image.writeBitmapFile(outImage);
 
-  //std::cout << (match ? "TEST PASSED" : "TEST FAILED") << std::endl;
-  //return (match ? EXIT_SUCCESS : EXIT_FAILURE) ;
+  std::cout << (match ? "TEST PASSED" : "TEST FAILED") << std::endl;
+  return (match ? EXIT_SUCCESS : EXIT_FAILURE) ;
 
 }
